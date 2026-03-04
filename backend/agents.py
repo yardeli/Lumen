@@ -1,104 +1,139 @@
-from crewai import Agent, Task, Crew
-from langchain.tools import Tool
+# Agent system for Lumen using CrewAI
+from crewai import Agent as CrewAIAgent, Task, Crew
+from typing import Optional
 
-# Define tools for agents
-def explain_concept(concept: str, level: str) -> str:
-    """Explains a concept at the appropriate level"""
-    return f"Explanation of {concept} for {level} level student"
+class Agent:
+    """Wrapper around CrewAI Agent for Lumen"""
+    def __init__(self, name: str, role: str, description: str, backstory: str):
+        self.name = name
+        self.role = role
+        self.description = description
+        self.agent = CrewAIAgent(
+            role=role,
+            goal=description,
+            backstory=backstory,
+            verbose=True
+        )
+    
+    def process(self, input_text: str) -> str:
+        """Process input and return response"""
+        return f"Response from {self.name}: {input_text}"
 
-def check_assignment(assignment: str) -> str:
+# Define tool functions
+def explain_concept(concept: str, level: str = "intermediate") -> str:
+    """Explains a concept at the appropriate level using Socratic method"""
+    return f"I'd like to help you understand {concept}. Let me start with a question: What do you already know about {concept}?"
+
+def check_assignment(assignment: str, submission: str) -> str:
     """Analyzes an assignment submission"""
-    return f"Analysis of: {assignment}"
+    return f"I've reviewed your work on '{assignment}'. Here's my feedback: You've shown good understanding of the basics. Consider exploring..."
 
-def track_progress(subject: str) -> str:
+def track_progress(subject: str, user_id: str) -> dict:
     """Gets current progress in a subject"""
-    return f"Progress report for {subject}"
+    return {
+        "subject": subject,
+        "proficiency": "intermediate",
+        "improvement_areas": ["problem solving", "application"],
+        "recommendation": "Practice more real-world examples"
+    }
 
-def flag_cheating(text: str) -> bool:
+def flag_cheating(text: str) -> dict:
     """Checks if text appears to be homework help rather than learning"""
-    # Simple heuristic - can be expanded
-    suspicious_phrases = ["solve this for me", "just give me the answer", "do my homework"]
-    return any(phrase in text.lower() for phrase in suspicious_phrases)
+    suspicious_phrases = ["solve this for me", "just give me the answer", "do my homework", "write my essay"]
+    is_suspicious = any(phrase in text.lower() for phrase in suspicious_phrases)
+    
+    return {
+        "flagged": is_suspicious,
+        "severity": "high" if is_suspicious else "low",
+        "message": "This request may violate academic integrity" if is_suspicious else "Safe to proceed"
+    }
 
-# Tool definitions
-explain_tool = Tool(
-    name="explain_concept",
-    func=explain_concept,
-    description="Explains a concept using Socratic method"
-)
-
-assignment_tool = Tool(
-    name="check_assignment",
-    func=check_assignment,
-    description="Analyzes student assignment submissions"
-)
-
-progress_tool = Tool(
-    name="track_progress",
-    func=track_progress,
-    description="Tracks student progress over time"
-)
-
-ethics_tool = Tool(
-    name="flag_cheating",
-    func=flag_cheating,
-    description="Identifies potential homework cheating attempts"
-)
-
-# Define Agents
+# Agent instances
 tutor_agent = Agent(
-    role="Tutor Agent",
-    goal="Help students understand concepts through Socratic questioning",
-    backstory="Expert educator who guides students to discover answers themselves",
-    tools=[explain_tool],
+    name="Tutor Agent",
+    role="Expert Tutor",
+    description="Help students understand concepts through Socratic questioning and guided discovery",
+    backstory="A patient, experienced educator who specializes in explaining complex concepts in simple terms. You use the Socratic method to guide students to discover answers themselves."
 )
 
 task_manager_agent = Agent(
-    role="Task Manager Agent", 
-    goal="Track assignments and deadlines",
-    backstory="Organized assistant who keeps students on top of their work",
-    tools=[assignment_tool],
+    name="Task Manager Agent",
+    role="Academic Task Manager",
+    description="Track student assignments, deadlines, and priorities to keep them organized",
+    backstory="An organized, proactive assistant who keeps detailed records of assignments and helps students manage their time effectively."
 )
 
 progress_agent = Agent(
-    role="Progress Tracker Agent",
-    goal="Analyze student performance and identify areas for improvement",
-    backstory="Data-driven tutor who personalizes learning paths",
-    tools=[progress_tool],
+    name="Progress Tracker Agent",
+    role="Learning Analyst",
+    description="Analyze student performance patterns and recommend personalized learning paths",
+    backstory="A data-driven educator who identifies learning gaps and strengths, then recommends targeted improvements."
 )
 
 ethics_agent = Agent(
-    role="Ethics Guard",
-    goal="Ensure platform is used for learning, not cheating",
-    backstory="Academic integrity monitor preventing misuse",
-    tools=[ethics_tool],
+    name="Ethics Guard",
+    role="Academic Integrity Monitor",
+    description="Ensure the platform is used for learning, not cheating. Flag potential violations.",
+    backstory="A vigilant guardian of academic integrity who helps maintain ethical learning standards. You're firm but fair, focused on preventing misuse while supporting genuine learning."
 )
 
-# Define Tasks
+# Task creation functions
 def create_tutoring_task(topic: str):
-    return Task(
-        description=f"Help student understand {topic} through guided questions",
-        agent=tutor_agent,
-        expected_output=f"Explanation and questions about {topic}"
+    """Create tutoring task using CrewAI"""
+    task = Task(
+        description=f"Explain the concept of '{topic}' to a student using the Socratic method. Start by asking what they already know.",
+        agent=tutor_agent.agent,
+        expected_output="An engaging explanation with questions to guide the student"
     )
+    return {
+        "task_id": f"tutoring_{topic}",
+        "type": "tutoring",
+        "topic": topic,
+        "task_obj": task,
+        "response": explain_concept(topic)
+    }
 
-def create_task_review_task(assignment: str):
-    return Task(
-        description=f"Review student work on: {assignment}",
-        agent=task_manager_agent,
-        expected_output="Feedback on assignment"
+def create_task_review_task(assignment: str, submission: str = ""):
+    """Create task review using CrewAI"""
+    task = Task(
+        description=f"Review the student's work on '{assignment}'. Provide constructive feedback, identify strengths, and suggest improvements.",
+        agent=task_manager_agent.agent,
+        expected_output="Detailed feedback with specific suggestions for improvement"
     )
+    return {
+        "task_id": f"review_{assignment}",
+        "type": "review",
+        "assignment": assignment,
+        "task_obj": task,
+        "response": check_assignment(assignment, submission)
+    }
 
-def create_progress_review_task(student_id: str):
-    return Task(
-        description=f"Generate progress report for student {student_id}",
-        agent=progress_agent,
-        expected_output="Detailed progress analysis"
+def create_progress_review_task(student_id: str, subject: str = ""):
+    """Create progress review using CrewAI"""
+    task = Task(
+        description=f"Generate a comprehensive progress report for student {student_id}. Analyze their performance in {subject or 'all subjects'}, identify patterns, and recommend next steps.",
+        agent=progress_agent.agent,
+        expected_output="Detailed progress analysis with recommendations"
     )
+    progress = track_progress(subject or "general", student_id)
+    return {
+        "task_id": f"progress_{student_id}",
+        "type": "progress_review",
+        "task_obj": task,
+        "data": progress
+    }
 
 def create_ethics_check_task(user_input: str):
-    return Task(
-        description=f"Check if input violates academic integrity: {user_input}",
-        agent=ethics_agent,
-        expected_output="Safety check result"
+    """Create ethics check using CrewAI"""
+    task = Task(
+        description=f"Analyze the following student request for potential academic integrity violations: '{user_input}'. Determine if this appears to be a request for help learning or a request for someone to do the work for them.",
+        agent=ethics_agent.agent,
+        expected_output="Assessment of whether the request violates academic integrity"
     )
+    result = flag_cheating(user_input)
+    return {
+        "task_id": "ethics_check",
+        "type": "ethics_check",
+        "task_obj": task,
+        "result": result
+    }
