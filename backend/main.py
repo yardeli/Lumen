@@ -14,10 +14,16 @@ from agents import (
 
 app = FastAPI(title="Lumen", version="1.0.0")
 
-# CORS configuration
+# CORS configuration - Allow frontend to communicate with API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "*"  # Remove this in production - specify exact origins
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
